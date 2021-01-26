@@ -1,6 +1,6 @@
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
-from chatbert.whatsapp import utils
+from chatbert import utils
 import os
 import time
 
@@ -16,7 +16,7 @@ class User:
             self.driver.get('http://web.whatsapp.com') # navigate to whatsapp
 
         try:
-            self.driver.find_element_by_class_name('_3DgtU') # the canvas with the login code
+            self.driver.find_element_by_xpath('.//div[@class="_1yHR2"]') # the canvas with the login code
             return False # the user has not logged in yet
 
         except:
@@ -27,18 +27,18 @@ class User:
         self.driver.close()
 
     def getChats(self): # get a list of all available chats
-        # to do: getting titles takes a really long time now
         if self.driver == None:
-            raise 
+            raise Exception('no driver yet') # error handling - todo
+        
         chats = [] # collective list of all chats
         
-        chatbox = self.driver.find_element_by_xpath('.//div[@class="_3Xjbn _3jNGW"]') # box containing all chat titles
+        chatbox = utils.waitForXPathLoad(self.driver, './/div[@class="_3Xjbn _3jNGW"]')[0] # box containing all chat titles
         max_scroll_height = self.driver.execute_script('return arguments[0].scrollHeight;', chatbox) # maximum scroll
 
         for i in range(0, max_scroll_height, 1000): # need to scroll so that every chat loads
             self.driver.execute_script('arguments[0].scrollTo(0, arguments[1]);', chatbox, i) # scroll down
 
-            tmp_chats = utils.waitForXPathLoad(self.driver, './/span[@class="_1hI5g _1XH7x _1VzZY"]') # wait for the chats to load
+            tmp_chats = utils.waitForXPathLoad(chatbox, './/span[@class="_1hI5g _1XH7x _1VzZY"]') # wait for the chats to load
             tmp_chats = [utils.waitForAttributeLoad(chat, 'title') for chat in tmp_chats] # get chat titles
             tmp_chats = [chat for chat in tmp_chats if chat != ''] # get all non blank chat titles
 
@@ -52,16 +52,16 @@ class User:
 
     def openChat(self, chat_name):
         if chat_name in self.chats: # check that a valid chat name was provided
-            chatbox = self.driver.find_element_by_xpath('.//div[@class="_3Xjbn _3jNGW"]') # box containing all chat titles
+            chatbox = utils.waitForXPathLoad(self.driver, './/div[@class="_3Xjbn _3jNGW"]')[0] # box containing all chat titles
             max_scroll_height = self.driver.execute_script('return arguments[0].scrollHeight;', chatbox) # maximum scroll
             
             for i in range(0, max_scroll_height, 1000): # need to scroll so that every chat loads
                 self.driver.execute_script('arguments[0].scrollTo(0, arguments[1]);', chatbox, i) # scroll down
-                tmp_chats = utils.waitForXPathLoad(self.driver, './/span[@class="_1hI5g _1XH7x _1VzZY"]') # wait for chats to load
-                chats = self.driver.find_elements_by_xpath('.//div[@class="_1MZWu"]') # get clickables
+                tmp_chats = utils.waitForXPathLoad(chatbox, './/span[@class="_1hI5g _1XH7x _1VzZY"]') # wait for chats to load
+                chats = utils.waitForXPathLoad(chatbox, './/div[@class="_1MZWu"]') # get clickables
 
                 for chat in chats: # find the correct clickable
-                    inner = chat.get_attribute('innerHTML')
+                    inner = utils.waitForAttributeLoad(chat, 'innerHTML')
                     inner = inner[inner.index('title="'):inner.index('class="_1hI5g _1XH7x _1VzZY"')] # find the location of the chat name
                     
                     if chat_name in inner: # check if the chat name is in this element
@@ -74,7 +74,7 @@ class User:
 
     def sendMessage(self, message):
         if self.current_chat != None: # check that there is currently a chat open
-            msg_box = self.driver.find_elements_by_xpath('.//div[@class="_1awRl copyable-text selectable-text"]')[-1] # the chat text box
+            msg_box = utils.waitForXPathLoad(self.driver, './/div[@class="_1awRl copyable-text selectable-text"]')[-1] # the chat text box
             msg_box.send_keys(message) # type the message
             msg_box.send_keys(Keys.ENTER) # send the message
             
@@ -84,16 +84,16 @@ class User:
     def getMessages(self, n=1):
         # to-do: there is an error if the other users send a message at exactly the right time (wait for messages to load)
         # to-do: scroll up to get more chats
-        # to-do: replace emojis inside messages
         # to-do: optimize loading time
         
         if self.current_chat != None: # check that there is currently a chat open
-            msgs_box = self.driver.find_element_by_xpath('.//div[@class="tSmQ1"]') # the box containing all messages
+            msgs_box = utils.waitForXPathLoad(self.driver, './/div[@class="tSmQ1"]')[0] # the box containing all messages
 
-            # this will be in the loop to scroll up
-            time.sleep(3e0) # wait for page load
-            messages = msgs_box.find_elements_by_xpath('.//div[@data-id][@tabindex]') # get every loaded message
-            valid_messages = []
+            # scroll up loop
+            messages = utils.waitForXPathLoad(msgs_box, './/div[@data-id][@tabindex]') # get every loaded message
+            valid_messages = messages
+
+            '''[]
             
             for message in messages: # filter out the whatsapp floating time and recalled and deleted messages
                 try:
@@ -101,15 +101,16 @@ class User:
                     
                 except:
                     pass
+            '''
                 
-            messages_data = [message.get_attribute('data-pre-plain-text') for message in valid_messages] # message sender and timestamp
+            messages_data = [utils.waitForAttributeLoad(message, 'data-pre-plain-text') for message in valid_messages] # message sender and timestamp
             messages_data = [message[1:-2].split('] ') for message in messages_data] # split timestamp and sender
             
-            messages = [message.find_element_by_xpath('.//span') for message in valid_messages]
-            messages = [message.find_element_by_xpath('.//span') if 'span' in message.get_attribute('innerHTML') else '' for message in messages]
-            messages = [message.get_attribute('innerHTML') if message != '' else '<img>' for message in messages] # message text or tag for only image messages
+            messages = [utils.waitForXPathLoad(message, './/span')[0] for message in valid_messages]
+            print(messages)
+            messages = [utils.waitForXPathLoad(message, './/span')[0] if 'span' in utils.waitForAttributeLoad(message, 'innerHTML') else '' for message in messages]
+            messages = [utils.waitForAttributeLoad(message, 'innerHTML') if message != '' else '<img>' for message in messages] # message text or tag for only image messages
             images = [utils.findImages(message) for message in messages]
-            print(images)
             
             return messages, messages_data
 

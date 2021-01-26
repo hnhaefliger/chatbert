@@ -1,1 +1,1 @@
-from whatsapp import User
+from chatbert.whatsapp.whatsapp import User
